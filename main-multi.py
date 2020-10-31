@@ -8,9 +8,9 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import datasets, transforms
 import pickle
 import copy
-
+import numpy as np
 DATA_LEN = 60000
-
+from tqdm import tqdm
 class custom_MNIST_dset(Dataset):
     def __init__(self,
                  image_path,
@@ -53,12 +53,11 @@ class Net(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
     
-def cli_train(args, old_model, device, train_loader, epoch, last_updates):
+def cli_train(args, old_model, device, train_loader, epoch, last_updates,iteration):
     model = copy.deepcopy(old_model)
     model.train()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
     model.zero_grad()
-    
     cli_ite_num = args.cli_ite_num
     for batch_idx, (data, target) in enumerate(train_loader):
         if cli_ite_num == 0:
@@ -71,18 +70,20 @@ def cli_train(args, old_model, device, train_loader, epoch, last_updates):
         loss.backward()
         optimizer.step()
 
-    return check_relevance(model, old_model, last_updates)
+    threshold = args.start_threshold/np.sqrt((epoch-1)*2000 + iteration+1)
+    return check_relevance(model, old_model, last_updates,threshold)
 
 def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag):
     model.train()
-    for i in range(DATA_LEN // (args.client_num * args.batch_size)):
+
+    for i in tqdm(range(DATA_LEN // (args.client_num * args.batch_size))):
         new_model_list = []
         
         if flag:
             tmp_flag = True
             
-            for i in range(args.client_num):
-                _, new_model = cli_train(args, model, device, train_loaders[i], epoch, None)
+            for j in range(args.client_num):
+                _, new_model = cli_train(args, model, device, train_loaders[j], epoch, None,i)
                 new_model_list.append(new_model)
                 
             cur_commu = args.client_num
@@ -91,8 +92,8 @@ def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag)
         else:
             cur_commu = 0
 
-            for i in range(args.client_num):
-                relv, new_model = cli_train(args, model, device, train_loaders[i], epoch, last_updates)
+            for j in range(args.client_num):
+                relv, new_model = cli_train(args, model, device, train_loaders[j], epoch, last_updates,i)
                 if relv:
                     cur_commu += 1
                     new_model_list.append(new_model)
@@ -103,7 +104,7 @@ def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag)
         commu.append(cur_commu)
 
         
-        print('Train Epoch: {}'.format(epoch))
+        # print('Train Epoch: {}/{}'.format(i,epoch))
             
 def test(args, model, device, test_loader, commu):
     model.eval()
@@ -128,10 +129,10 @@ def test(args, model, device, test_loader, commu):
     pass
     #
     
-def check_relevance(model, old_model, last_updates):
+def check_relevance(model, old_model, last_updates,threshold):
     sign_sum = 0
     sign_size = 0
-    rel_threshold = 0.5
+    rel_threshold = threshold
     model_para_list = []
     cur_updates = []
     
@@ -161,6 +162,7 @@ def check_relevance(model, old_model, last_updates):
     return e >= rel_threshold, model_para_list
 
 def merge(model, new_model_list):
+    # print(len(new_model_list))
     if len(new_model_list) == 0:
         print("No model's revelence is higher than threshold.")
         return
@@ -169,7 +171,7 @@ def merge(model, new_model_list):
     
     para_ind = 0
     for param in model.parameters():
-        print(param.data)
+        #print(param.data)
         param.data = new_model_list[0][para_ind].data
         for i in range(1, len(new_model_list)):
             # cannot use "+=" cause torch doesn't allow in-place
@@ -210,6 +212,7 @@ def main():
                         help='For Saving the current Model')
     parser.add_argument('--client-num', type=int, default=10)
     parser.add_argument('--cli-ite-num', type=int, default=3)
+    parser.add_argument('--start_threshold', type=float, default=0.5)
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -217,7 +220,7 @@ def main():
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
+    kwargs = {'num_workers': 0, 'pin_memory': True} if use_cuda else {}
     
     train_loaders = []
     for i in range(args.client_num):
