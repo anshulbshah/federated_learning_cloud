@@ -60,9 +60,9 @@ def cli_train(args, old_model, device, train_loader, epoch, last_updates,iterati
     model.zero_grad()
     cli_ite_num = args.cli_ite_num
     for batch_idx, (data, target) in enumerate(train_loader):
-        if cli_ite_num == 0:
-            break
-        cli_ite_num -= 1
+        # if cli_ite_num == 0:
+        #     break
+        # cli_ite_num -= 1
         
         data, target = data.type('torch.FloatTensor').to(device), target.to(device, dtype=torch.int64)
         output = model(data)
@@ -100,6 +100,7 @@ def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag)
                     new_model_list.append(new_model)
         
         # Merge model grad
+        print(epoch,len(new_model_list))
         last_updates = merge(model, new_model_list)
         
         commu.append(cur_commu)
@@ -133,7 +134,7 @@ def test(args, model, device, test_loader, commu):
 def check_relevance(model, old_model, last_updates,threshold):
     sign_sum = 0
     sign_size = 0
-    rel_threshold = threshold
+    rel_threshold = 0.5#threshold
     model_para_list = []
     cur_updates = []
     
@@ -165,7 +166,7 @@ def check_relevance(model, old_model, last_updates,threshold):
 def merge(model, new_model_list):
     # print(len(new_model_list))
     if len(new_model_list) == 0:
-        print("No model's revelence is higher than threshold.")
+        # print("No model's revelence is higher than threshold.")
         return
     
     old_model = copy.deepcopy(model)
@@ -221,7 +222,7 @@ def main():
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    kwargs = {'num_workers': 0, 'pin_memory': True} if use_cuda else {}
+    kwargs = {'num_workers': 4, 'pin_memory': True} if use_cuda else {}
     
     train_loaders = []
     for i in range(args.client_num):
