@@ -71,22 +71,26 @@ def cli_train(args, old_model, device, train_loader, epoch, last_updates,iterati
         optimizer.step()
 
 
-    threshold = args.start_threshold/np.sqrt((epoch-1)*2000 + iteration+1)
+    threshold = args.start_threshold/np.sqrt((epoch-1)*(DATA_LEN // (args.client_num * args.batch_size)) + iteration+1)
     # print(epoch,threshold)
     return check_relevance(model, old_model, last_updates,threshold)
 
 def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag):
     model.train()
+    print('DATALEN:{}, product: {}'.format(DATA_LEN,args.client_num * args.batch_size))
 
     for i in tqdm(range(DATA_LEN // (args.client_num * args.batch_size))):
         new_model_list = []
+        relevances = []
         
         if flag:
             tmp_flag = True
             
             for j in range(args.client_num):
-                _, new_model = cli_train(args, model, device, train_loaders[j], epoch, None,i)
+                # print('client {}'.format(j))
+                _, new_model,e = cli_train(args, model, device, train_loaders[j], epoch, None,i)
                 new_model_list.append(new_model)
+                relevances.append(e)
                 
             cur_commu = args.client_num
             flag = False
@@ -94,13 +98,16 @@ def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag)
             cur_commu = 0
 
             for j in range(args.client_num):
-                relv, new_model = cli_train(args, model, device, train_loaders[j], epoch, last_updates,i)
+                relv, new_model,e = cli_train(args, model, device, train_loaders[j], epoch, last_updates,i)
                 if relv:
                     cur_commu += 1
                     new_model_list.append(new_model)
+                relevances.append(e)
+
         
         # Merge model grad
-        print(epoch,len(new_model_list))
+        print('ep,len',epoch,len(new_model_list))
+        
         last_updates = merge(model, new_model_list)
         
         commu.append(cur_commu)
@@ -134,14 +141,14 @@ def test(args, model, device, test_loader, commu):
 def check_relevance(model, old_model, last_updates,threshold):
     sign_sum = 0
     sign_size = 0
-    rel_threshold = 0.5#threshold
+    rel_threshold = 0.1#threshold
     model_para_list = []
     cur_updates = []
     
     if last_updates is None:
         for cur_para, old_para in zip(model.parameters(), old_model.parameters()):
             cur_updates.append(cur_para.data - old_para.data)
-        return True, cur_updates
+        return True, cur_updates, None
     
     for cur_para, old_para in zip(model.parameters(), old_model.parameters()):
         cur_updates.append(cur_para.data - old_para.data)
@@ -159,9 +166,10 @@ def check_relevance(model, old_model, last_updates,threshold):
         sign_size += sign.numel()
     
     # 0.000001 is given in case of dividing by 0
+
     e = sign_sum / (sign_size + 0.000001)
 
-    return e >= rel_threshold, model_para_list
+    return e >= rel_threshold, model_para_list, e
 
 def merge(model, new_model_list):
     # print(len(new_model_list))
