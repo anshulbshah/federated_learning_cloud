@@ -177,7 +177,7 @@ print(len(train_list))
 
 train_list.sort(key = lambda x : x[1])
 
-clients_num = 10
+clients_num = 100
 group_size = len(train_list) // clients_num
 
 train_group = []

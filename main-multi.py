@@ -70,7 +70,9 @@ def cli_train(args, old_model, device, train_loader, epoch, last_updates,iterati
         loss.backward()
         optimizer.step()
 
+
     threshold = args.start_threshold/np.sqrt((epoch-1)*2000 + iteration+1)
+    # print(epoch,threshold)
     return check_relevance(model, old_model, last_updates,threshold)
 
 def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag):
@@ -88,7 +90,6 @@ def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag)
                 
             cur_commu = args.client_num
             flag = False
-            
         else:
             cur_commu = 0
 
