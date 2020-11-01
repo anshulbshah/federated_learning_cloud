@@ -5,12 +5,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from torchvision import datasets, transforms
+from torchvision import transforms
 import pickle
 import copy
 import numpy as np
 DATA_LEN = 60000
 from tqdm import tqdm
+import dataset
 class custom_MNIST_dset(Dataset):
     def __init__(self,
                  image_path,
@@ -49,8 +50,7 @@ class Net(nn.Module):
         self.fc2 = nn.Linear(500, 10)
 
     def forward(self, x):
-        import pdb; pdb.set_trace()  # breakpoint 7d5622bb //
-        
+
         x = F.relu(self.conv1(x))
         x = F.max_pool2d(x, 2, 2)
         x = F.relu(self.conv2(x))
@@ -73,7 +73,6 @@ class Net2(nn.Module):
         self.fc2 = nn.Linear(128, 10)
 
     def forward(self, x):
-        import pdb; pdb.set_trace()  # breakpoint 11797506 //
 
         x = self.conv1(x)
         x = F.relu(x)
@@ -159,24 +158,24 @@ def main():
     kwargs = {'num_workers': 8, 'pin_memory': True} if use_cuda else {}
 
 
-    train_loader = torch.utils.data.DataLoader(
-                            custom_MNIST_dset('MNIST_data/train_data-', 'MNIST_data/train_label-',
-                                           img_transform=transforms.Compose([
-                                               transforms.ToTensor(),
-                                               transforms.Normalize((0.1307,), (0.3081,))
-                                           ])),
-                            batch_size=args.batch_size, shuffle=True, **kwargs)
     # train_loader = torch.utils.data.DataLoader(
-    #                 datasets.MNIST('../data', train=True, download=True, transform=transforms.Compose([
-    #                                    transforms.ToTensor(),
-    #                                    transforms.Normalize((0.1307,), (0.3081,))
-    #                                ])),
-    #                 batch_size=args.batch_size, shuffle=True, **kwargs)
+    #                         custom_MNIST_dset('MNIST_data/train_data-', 'MNIST_data/train_label-',
+    #                                        img_transform=transforms.Compose([
+    #                                            transforms.ToTensor(),
+    #                                            transforms.Normalize((0.1307,), (0.3081,))
+    #                                        ])),
+    #                         batch_size=args.batch_size, shuffle=True, **kwargs)
+    train_loader = torch.utils.data.DataLoader(
+                    dataset.MNIST('../data', train=True, download=True, transform=transforms.Compose([
+                                       transforms.ToTensor(),
+                                       transforms.Normalize((0.1307,), (0.3081,))
+                                   ]),client_id=0,num_clients=100),
+                    batch_size=args.batch_size, shuffle=True, **kwargs)
 
 
     
     test_loader = torch.utils.data.DataLoader(
-                    datasets.MNIST('../data', train=False, download=True, transform=transforms.Compose([
+                    dataset.MNIST('../data', train=False, download=True, transform=transforms.Compose([
                                        transforms.ToTensor(),
                                        transforms.Normalize((0.1307,), (0.3081,))
                                    ])),
