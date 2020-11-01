@@ -11,30 +11,31 @@ import copy
 import numpy as np
 DATA_LEN = 60000
 from tqdm import tqdm
+import dataset
 # import wandb
-class custom_MNIST_dset(Dataset):
-    def __init__(self,
-                 image_path,
-                 label_path,
-                 img_transform = None):
-        with open(image_path, 'rb') as image_file:
-            self.image_list = pickle.load(image_file)
-        with open(label_path, 'rb') as label_file:
-            self.label_list = pickle.load(label_file)
+# class custom_MNIST_dset(Dataset):
+#     def __init__(self,
+#                  image_path,
+#                  label_path,
+#                  img_transform = None):
+#         with open(image_path, 'rb') as image_file:
+#             self.image_list = pickle.load(image_file)
+#         with open(label_path, 'rb') as label_file:
+#             self.label_list = pickle.load(label_file)
         
-        self.img_transform = img_transform
+#         self.img_transform = img_transform
     
-    def __getitem__(self, index):
-        image = self.image_list[index]
-        label = self.label_list[index]
+#     def __getitem__(self, index):
+#         image = self.image_list[index]
+#         label = self.label_list[index]
         
-        if self.img_transform is not None:
-            image = self.img_transform(image)
+#         if self.img_transform is not None:
+#             image = self.img_transform(image)
         
-        return image, label
+#         return image, label
     
-    def __len__(self):
-        return len(self.image_list)
+#     def __len__(self):
+#         return len(self.image_list)
 
 class Net(nn.Module):
     def __init__(self):
@@ -58,14 +59,13 @@ def cli_train(args, old_model, device, train_loader, epoch, last_updates,iterati
     model = copy.deepcopy(old_model)
     model.train()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
-    model.zero_grad()
     cli_ite_num = args.cli_ite_num
 
     for batch_idx, (data, target) in enumerate(train_loader):
         if cli_ite_num == 0:
             break
         cli_ite_num -= 1
-        
+        optimizer.zero_grad()
         data, target = data.type('torch.FloatTensor').to(device), target.to(device, dtype=torch.int64)
         output = model(data)
         loss = F.nll_loss(output, target)
@@ -249,18 +249,27 @@ def main():
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    kwargs = {'num_workers': 8, 'pin_memory': True} if use_cuda else {}
+    kwargs = {'num_workers': 0, 'pin_memory': True} if use_cuda else {}
     
     train_loaders = []
+    # for i in range(args.client_num):
+    #     train_loaders.append(torch.utils.data.DataLoader(
+    #                 dataset.MNIST('../data', train=True, download=True, transform=transforms.Compose([
+    #                                    transforms.ToTensor(),
+    #                                    transforms.Normalize((0.1307,), (0.3081,))
+    #                                ]),client_id=i,num_clients=args.client_num
+
+
+    #                 ),
+    #                 batch_size=args.batch_size, shuffle=True, **kwargs))
     for i in range(args.client_num):
         train_loaders.append(torch.utils.data.DataLoader(
-                            custom_MNIST_dset('MNIST_data/train_data-' + str(i), 'MNIST_data/train_label-' + str(i),
-                                           img_transform=transforms.Compose([
+                            datasets.MNIST('../data', train=True, download=True, transform=transforms.Compose([
                                                transforms.ToTensor(),
                                                transforms.Normalize((0.1307,), (0.3081,))
                                            ])),
-                            batch_size=args.batch_size, shuffle=False, **kwargs))
-    
+                            batch_size=args.batch_size, shuffle=True, **kwargs))
+
     test_loader = torch.utils.data.DataLoader(
                     datasets.MNIST('../data', train=False, download=True, transform=transforms.Compose([
                                        transforms.ToTensor(),
