@@ -11,6 +11,7 @@ import copy
 import numpy as np
 DATA_LEN = 60000
 from tqdm import tqdm
+# import wandb
 class custom_MNIST_dset(Dataset):
     def __init__(self,
                  image_path,
@@ -59,10 +60,11 @@ def cli_train(args, old_model, device, train_loader, epoch, last_updates,iterati
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
     model.zero_grad()
     cli_ite_num = args.cli_ite_num
+
     for batch_idx, (data, target) in enumerate(train_loader):
-        # if cli_ite_num == 0:
-        #     break
-        # cli_ite_num -= 1
+        if cli_ite_num == 0:
+            break
+        cli_ite_num -= 1
         
         data, target = data.type('torch.FloatTensor').to(device), target.to(device, dtype=torch.int64)
         output = model(data)
@@ -79,6 +81,8 @@ def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag)
     model.train()
     print('DATALEN:{}, product: {}'.format(DATA_LEN,args.client_num * args.batch_size))
 
+    client_signs = np.zeros(args.client_num)
+
     for i in tqdm(range(DATA_LEN // (args.client_num * args.batch_size))):
         new_model_list = []
         relevances = []
@@ -89,6 +93,7 @@ def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag)
             for j in range(args.client_num):
                 # print('client {}'.format(j))
                 _, new_model,e = cli_train(args, model, device, train_loaders[j], epoch, None,i)
+                client_signs[j] = e
                 new_model_list.append(new_model)
                 relevances.append(e)
                 
@@ -99,6 +104,7 @@ def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag)
 
             for j in range(args.client_num):
                 relv, new_model,e = cli_train(args, model, device, train_loaders[j], epoch, last_updates,i)
+                client_signs[j] = (client_signs[j]*(i) + e)/i+1
                 if relv:
                     cur_commu += 1
                     new_model_list.append(new_model)
@@ -107,8 +113,14 @@ def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag)
         
         # Merge model grad
         print('ep,len',epoch,len(new_model_list))
-        
+        # wandb.log({'client_nums':client_signs})
+
+        # wandb.log{'':client_signs}
+        # print(model.fc2.weight)
+
         last_updates = merge(model, new_model_list)
+        # print(model.fc2.weight)
+
         
         commu.append(cur_commu)
 
@@ -141,7 +153,7 @@ def test(args, model, device, test_loader, commu):
 def check_relevance(model, old_model, last_updates,threshold):
     sign_sum = 0
     sign_size = 0
-    rel_threshold = 0.1#threshold
+    rel_threshold = 0.0#0.8#threshold
     model_para_list = []
     cur_updates = []
     
@@ -166,10 +178,14 @@ def check_relevance(model, old_model, last_updates,threshold):
         sign_size += sign.numel()
     
     # 0.000001 is given in case of dividing by 0
+    # if last_updates is not None:
 
     e = sign_sum / (sign_size + 0.000001)
 
+    # print(e)
     return e >= rel_threshold, model_para_list, e
+    # return True, model_para_list, e
+
 
 def merge(model, new_model_list):
     # print(len(new_model_list))
@@ -180,8 +196,11 @@ def merge(model, new_model_list):
     old_model = copy.deepcopy(model)
     
     para_ind = 0
-    for param in model.parameters():
-        #print(param.data)
+
+    for name,param in model.named_parameters():
+        #print(param.data)        
+        # if 'fc2.weight' in name:
+
         param.data = new_model_list[0][para_ind].data
         for i in range(1, len(new_model_list)):
             # cannot use "+=" cause torch doesn't allow in-place
@@ -221,16 +240,16 @@ def main():
     parser.add_argument('--save-model', action='store_true', default=False,
                         help='For Saving the current Model')
     parser.add_argument('--client-num', type=int, default=10)
-    parser.add_argument('--cli-ite-num', type=int, default=3)
+    parser.add_argument('--cli-ite-num', type=int, default=4)
     parser.add_argument('--start_threshold', type=float, default=0.5)
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
-
+    # wandb.init(project="cloud")
     torch.manual_seed(args.seed)
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    kwargs = {'num_workers': 4, 'pin_memory': True} if use_cuda else {}
+    kwargs = {'num_workers': 8, 'pin_memory': True} if use_cuda else {}
     
     train_loaders = []
     for i in range(args.client_num):
@@ -247,7 +266,7 @@ def main():
                                        transforms.ToTensor(),
                                        transforms.Normalize((0.1307,), (0.3081,))
                                    ])),
-                    batch_size=args.test_batch_size, shuffle=True, **kwargs)
+                    batch_size=args.test_batch_size, shuffle=False, **kwargs)
 
     
     model = Net().to(device)
