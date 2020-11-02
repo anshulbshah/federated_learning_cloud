@@ -225,7 +225,7 @@ def main():
             print('exiting!')
             return
         communication_rounds.append(c_round)
-        test_acc,test_loss = test(args, model, device, test_loader)
+        test_loss,test_acc = test(args, model, device, test_loader)
         print('Cululative Communication Rounds : {}'.format(sum(communication_rounds)))
         wand_dict = {
             'Communication Rounds':sum(communication_rounds),
