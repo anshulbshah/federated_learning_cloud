@@ -10,7 +10,7 @@ import copy
 import numpy as np
 from tqdm import tqdm
 import dataset
-
+import wandb
 
 class Net(nn.Module):
     def __init__(self):
@@ -133,7 +133,7 @@ def global_train(args, model, device, train_loaders, it, last_update):
         return -1,-1
     else:
         apply_update(model,effective_update)    
-    return c_rounds,effective_update
+    return c_rounds,effective_update, np.mean(np.asarray(average_signs)),threshold
 
 def test(args, model, device, test_loader):
     model.eval()
@@ -155,15 +155,16 @@ def test(args, model, device, test_loader):
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
+    return test_loss, 100. * correct / len(test_loader.dataset)
 
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=32, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
-    parser.add_argument('--max_iterations', type=int, default=10000, metavar='N',
+    parser.add_argument('--max_iterations', type=int, default=20, metavar='N',
                         help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                         help='learning rate (default: 0.01)')
@@ -181,6 +182,8 @@ def main():
     parser.add_argument('--cli-ite-num', type=int, default=4)
     parser.add_argument('--start_threshold', type=float, default=0.8)
     args = parser.parse_args()
+    wandb.init(project="cloud-federated",entity="cloud")
+    wandb.config.update(args)
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     # wandb.init(project="cloud")
@@ -188,7 +191,7 @@ def main():
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    kwargs = {'num_workers': 2, 'pin_memory': True} if use_cuda else {}
+    kwargs = {'num_workers': 0, 'pin_memory': True} if use_cuda else {}
 
     train_loaders = []
 
@@ -217,13 +220,22 @@ def main():
     communication_rounds = []
     last_update = None
     for it in tqdm(range(1, args.max_iterations)):
-        c_round,last_update = global_train(args, model, device, train_loaders, it,last_update)
+        c_round,last_update,avg_sign,thresh = global_train(args, model, device, train_loaders, it,last_update)
         if c_round == -1:
             print('exiting!')
             return
         communication_rounds.append(c_round)
-        test(args, model, device, test_loader)
+        test_acc,test_loss = test(args, model, device, test_loader)
         print('Cululative Communication Rounds : {}'.format(sum(communication_rounds)))
+        wand_dict = {
+            'Communication Rounds':sum(communication_rounds),
+            'Test loss': test_loss,
+            'Test Acc': test_acc,
+            'Average sign':avg_sign,
+            'Threshold' :thresh
+        }   
+        wandb.log(wand_dict)
+
 
     if (args.save_model):
         torch.save(model.state_dict(),"mnist_cnn.pt")
