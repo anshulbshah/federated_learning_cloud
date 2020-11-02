@@ -111,7 +111,9 @@ class MNIST(VisionDataset):
             chunks = self.chunkIt(range(self.data.shape[0]),num_clients)
             self.data = self.data[chunks[client_id]]
             self.targets = self.targets[chunks[client_id]]
-
+        
+        # else:
+                
 
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         """

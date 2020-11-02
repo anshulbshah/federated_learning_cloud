@@ -60,7 +60,7 @@ def cli_train(args, old_model, device, train_loader, epoch, last_updates,iterati
     model.train()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
     cli_ite_num = args.cli_ite_num
-
+    # print(cli_ite_num)
     for batch_idx, (data, target) in enumerate(train_loader):
         if cli_ite_num == 0:
             break
@@ -83,46 +83,50 @@ def glo_train(args, model, device, train_loaders, optimizer, epoch, commu, flag)
 
     client_signs = np.zeros(args.client_num)
 
-    for i in tqdm(range(DATA_LEN // (args.client_num * args.batch_size))):
-        new_model_list = []
-        relevances = []
+    # for i in tqdm(range(DATA_LEN // (args.client_num * args.batch_size))):
+    i = 0
+    new_model_list = []
+    relevances = []
+    
+    if flag:
+        tmp_flag = True
         
-        if flag:
-            tmp_flag = True
+        for j in range(args.client_num):
+            # print('client {}'.format(j))
+            _, new_model,e = cli_train(args, model, device, train_loaders[j], epoch, None,i)
+            client_signs[j] = e
+            new_model_list.append(new_model)
+            relevances.append(e)
             
-            for j in range(args.client_num):
-                # print('client {}'.format(j))
-                _, new_model,e = cli_train(args, model, device, train_loaders[j], epoch, None,i)
-                client_signs[j] = e
+        cur_commu = args.client_num
+        flag = False
+    else:
+        print('here!')
+        cur_commu = 0
+
+        for j in range(args.client_num):
+            relv, new_model,e = cli_train(args, model, device, train_loaders[j], epoch, last_updates,i)
+            client_signs[j] = (client_signs[j]*(i) + e)/i+1
+            if relv:
+                cur_commu += 1
                 new_model_list.append(new_model)
-                relevances.append(e)
-                
-            cur_commu = args.client_num
-            flag = False
-        else:
-            cur_commu = 0
+            relevances.append(e)
 
-            for j in range(args.client_num):
-                relv, new_model,e = cli_train(args, model, device, train_loaders[j], epoch, last_updates,i)
-                client_signs[j] = (client_signs[j]*(i) + e)/i+1
-                if relv:
-                    cur_commu += 1
-                    new_model_list.append(new_model)
-                relevances.append(e)
+    
 
-        
-        # Merge model grad
-        print('ep,len',epoch,len(new_model_list))
-        # wandb.log({'client_nums':client_signs})
+    # Merge model grad
+    print('ep,len',epoch,len(new_model_list))
+    # wandb.log({'client_nums':client_signs})
 
-        # wandb.log{'':client_signs}
-        # print(model.fc2.weight)
+    # wandb.log{'':client_signs}
+    # print(model.fc2.weight)
+    model_before_update = copy.deepcopy(model)
+    last_updates = merge(model, new_model_list)
 
-        last_updates = merge(model, new_model_list)
-        # print(model.fc2.weight)
+    # print(model.fc2.weight)
 
-        
-        commu.append(cur_commu)
+    
+    commu.append(cur_commu)
 
         
         # print('Train Epoch: {}/{}'.format(i,epoch))
