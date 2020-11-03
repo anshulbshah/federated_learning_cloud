@@ -11,6 +11,7 @@ import numpy as np
 from tqdm import tqdm
 import dataset
 import wandb
+import matplotlib.pyplot as plt
 
 class Net(nn.Module):
     def __init__(self):
@@ -32,7 +33,21 @@ class Net(nn.Module):
         return x
         # return F.log_softmax(x, dim=1)
 
+
+def draw_heatmap(inputdata):
+    """Return a heatmap generated from te input data along witha colormap"""
+    fig, ax = plt.subplots(1,1)
+    im = ax.imshow(inputdata)
+    cbar = ax.figure.colorbar(im, ax=ax,fraction=0.02, pad=0.04)
+    ax.set_xticks(np.arange(inputdata.shape[1]))
+    fig.tight_layout()
+    return fig
+
 def combine_updates(local_updates,relevances):
+    """
+    This function computes the effective update for each parameter by
+    going over each parameter and averaging the update from all client models
+    """
     where_relevant = np.where(relevances == 1)[0]
     num_relevant = where_relevant.shape[0]
 
@@ -51,6 +66,9 @@ def combine_updates(local_updates,relevances):
 
 
 def apply_update(model,update):
+    """
+    Applies the gradients to update the global model
+    """
     current_model_dict = model.state_dict()
     updated_model_dict = copy.deepcopy(model.state_dict())
 
@@ -60,6 +78,9 @@ def apply_update(model,update):
     model.load_state_dict(updated_model_dict)
 
 def compute_local_update(model,local_model):
+    """
+    Computes the local updates for each parameter of the local model wrt the last global model
+    """
     update = {}
     model_dict = model.state_dict()
     local_model_dict = local_model.state_dict()
@@ -68,6 +89,11 @@ def compute_local_update(model,local_model):
     return update
 
 def check_relevance(local_model_update,last_updates,threshold):
+    """
+    This function computes the relevance of the local update as defined in 
+    CMFL. It effectively compares the sign of previous update and the current update and compare the average value of this
+    sign across parameters to a threshold. An update is considered relevant if it exceeds a threshold
+    """
     sign_sum = 0
     sign_size = 0
     rel_threshold = threshold
@@ -91,16 +117,20 @@ def check_relevance(local_model_update,last_updates,threshold):
     return avg_sign>threshold,avg_sign
 
 def client_train(args,ck,model,last_update,data_loader,device,threshold):
+    """
+    This function makes a copy of the incoming global model and runs a training loop on the local dataset. It then returns 
+    the effective local updates, relevances and the average sign 
+    """
     local_model = copy.deepcopy(model)
     optimizer = optim.SGD(local_model.parameters(), lr=args.lr, momentum=args.momentum)
     local_model.train()
-    crtiterion = torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.CrossEntropyLoss()
     for ep in range(args.cli_ite_num):
         for batch_idx, (data, target) in enumerate(data_loader):
             optimizer.zero_grad()
             data, target = data.type('torch.FloatTensor').to(device), target.to(device, dtype=torch.int64)
             output = local_model(data)
-            loss = crtiterion(output, target)
+            loss = criterion(output, target)
             loss.backward()
             optimizer.step()
 
@@ -111,6 +141,10 @@ def client_train(args,ck,model,last_update,data_loader,device,threshold):
 
 
 def global_train(args, model, device, train_loaders, it, last_update):
+    """
+    This function trains the global model by sending the current model to all local clients, getting their updates and 
+    using the updates to get the new global model
+    """
     local_updates = []
     relevances = []
     average_signs = []
@@ -130,12 +164,15 @@ def global_train(args, model, device, train_loaders, it, last_update):
 
     if len(list(effective_update.keys())) == 0:
         print('No relevant model found!')
-        return -1,-1
+        return 0,None,threshold,relevances
     else:
         apply_update(model,effective_update)    
-    return c_rounds,effective_update, np.mean(np.asarray(average_signs)),threshold
+    return c_rounds,effective_update, np.mean(np.asarray(average_signs)),threshold, relevances
 
 def test(args, model, device, test_loader):
+    """
+    A simple testing, that happens on the cloud(global)
+    """
     model.eval()
     test_loss = 0
     correct = 0
@@ -157,6 +194,45 @@ def test(args, model, device, test_loader):
         100. * correct / len(test_loader.dataset)))
     return test_loss, 100. * correct / len(test_loader.dataset)
 
+def plot_data(data_dict):
+    num_its_log = len(data_dict['communication_rounds'])
+    cum_comm_rounds = np.cumsum(data_dict['communication_rounds'])
+    plt.figure('1')
+    plt.plot(range(num_its_log),cum_comm_rounds)
+    plt.title('Cumulative Communication Rounds')
+    plt.xlabel('Iterations')
+    plt.ylabel('Cumulative Communication Rounds')
+    plt.savefig('cumulative_comm_rounds.png')
+
+    plt.figure('2')
+    plt.plot(cum_comm_rounds,data_dict['test_loss'])
+    plt.title('Test loss vs Cum communication rounds')
+    plt.xlabel('Iterations')
+    plt.ylabel('Test Loss')
+    plt.savefig('test_loss.png')
+
+    plt.figure('3')
+    plt.plot(cum_comm_rounds,data_dict['test_acc'])
+    plt.title('Test Acc vs Cum communication rounds')
+    plt.xlabel('Iterations')
+    plt.ylabel('Test Acc')
+    plt.savefig('test_acc.png')
+
+    plt.figure('4')
+    plt.plot(range(num_its_log),data_dict['avg_sign'])
+    plt.title('Average sign over iterations')
+    plt.xlabel('Iterations')
+    plt.ylabel('Average Sign')
+    plt.savefig('avg_sign.png')
+
+    plt.figure('5')
+    plt.plot(range(num_its_log),data_dict['threshold'])
+    plt.title('Threshold vs iterations')
+    plt.xlabel('Iterations')
+    plt.ylabel('Threshold')
+    plt.savefig('threshold.png')
+
+
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
@@ -165,7 +241,7 @@ def main():
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--max_iterations', type=int, default=20, metavar='N',
-                        help='number of epochs to train (default: 10)')
+                        help='number of iterations for global training')
     parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                         help='learning rate (default: 0.01)')
     parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
@@ -178,23 +254,33 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--save-model', action='store_true', default=False,
                         help='For Saving the current Model')
-    parser.add_argument('--client-num', type=int, default=100)
-    parser.add_argument('--cli-ite-num', type=int, default=4)
-    parser.add_argument('--start_threshold', type=float, default=0.8)
+    parser.add_argument('--client-num', type=int, default=100,
+                        help='Number of clients(locals) to use')
+    parser.add_argument('--cli-ite-num', type=int, default=4,
+                        help='Number of epochs to train the local clients for')
+    parser.add_argument('--start_threshold', type=float, default=0.8,
+                        help='Starting threshold for Check relevance function')
+    parser.add_argument('--use_wandb', action='store_true', default=False,
+                        help='Use wandb for logging')
     args = parser.parse_args()
-    wandb.init(project="cloud-federated",entity="cloud")
-    wandb.config.update(args)
+
+    #We use wandb for code logging. First run would require you to set it up on wandb.ai. 
+    #To use wandb, set the flab --use_wandb. If not, matlplotlib plots are stored 
+
+    if args.use_wandb:
+        wandb.init(project="cloud-federated",entity="cloud")
+        wandb.config.update(args)
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
-    # wandb.init(project="cloud")
     torch.manual_seed(args.seed)
-
     device = torch.device("cuda" if use_cuda else "cpu")
-
     kwargs = {'num_workers': 0, 'pin_memory': True} if use_cuda else {}
 
+    #All trainloders to be appended to this list
     train_loaders = []
 
+    #We modify the original MNIST dataloader to work for our setting as different clients have different subsets of the data
+    #Refer to dataset.py for changes
     for i in range(args.client_num):
         train_loaders.append(torch.utils.data.DataLoader(
                             dataset.MNIST('../data', train=True, download=True, transform=transforms.Compose([
@@ -204,6 +290,7 @@ def main():
                             batch_size=args.batch_size, shuffle=True, **kwargs))
 
     
+    #Test uses the standard dataloader used for MNIST
     test_loader = torch.utils.data.DataLoader(
                     dataset.MNIST('../data', train=False, download=True, transform=transforms.Compose([
                                        transforms.ToTensor(),
@@ -213,30 +300,48 @@ def main():
 
 
     model = Net().to(device)
-    # model = Net2().to(device)
-
-    # optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
     communication_rounds = []
-    last_update = None
+    last_update = None # Last update is initialized to None --> implies that for the first run, all updates are relevant
+    all_relevances = [] 
+    test_losses = []
+    test_accuracies = []
+    thresholds =[]
+    average_signs =[]
     for it in tqdm(range(1, args.max_iterations)):
-        c_round,last_update,avg_sign,thresh = global_train(args, model, device, train_loaders, it,last_update)
-        if c_round == -1:
-            print('exiting!')
-            return
+        c_round,last_update,avg_sign,thresh,rel_it = global_train(args, model, device, train_loaders, it,last_update)
         communication_rounds.append(c_round)
         test_loss,test_acc = test(args, model, device, test_loader)
-        print('Cululative Communication Rounds : {}'.format(sum(communication_rounds)))
-        wand_dict = {
-            'Communication Rounds':sum(communication_rounds),
-            'Test loss': test_loss,
-            'Test Acc': test_acc,
-            'Average sign':avg_sign,
-            'Threshold' :thresh
-        }   
-        wandb.log(wand_dict)
+        test_losses.append(test_loss)
+        test_accuracies.append(test_acc)
+        print('Cumulative Communication Rounds : {}'.format(sum(communication_rounds)))
+        thresholds.append(thresh)
+        average_signs.append(avg_sign)
+        all_relevances.append(rel_it)
+        if args.use_wandb:
+            heatmap = draw_heatmap(np.stack(all_relevances,1).astype(np.float))
+            wand_dict = {
+                'Communication Rounds':sum(communication_rounds),
+                'Test loss': test_loss,
+                'Test Acc': test_acc,
+                'Average sign':avg_sign,
+                'Threshold' :thresh,
+                'relevance_it': wandb.Image(heatmap)
+            }   
+            wandb.log(wand_dict)
+        if last_update == None:
+            print('exiting!')
+            break
 
-
+    all_stats = {
+        'communication_rounds':communication_rounds,
+        'test_loss':test_losses,
+        'test_acc':test_accuracies,
+        'avg_sign':average_signs,
+        'threshold':thresholds,
+        #'heatmap':np.stack(all_relevances,1).astype(np.float)
+    }
+    plot_data(all_stats)
     if (args.save_model):
         torch.save(model.state_dict(),"mnist_cnn.pt")
 
