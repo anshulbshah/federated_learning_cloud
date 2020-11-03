@@ -12,6 +12,7 @@ from tqdm import tqdm
 import dataset
 import wandb
 import matplotlib.pyplot as plt
+import random
 
 def set_random_seeds(seed):
     torch.manual_seed(seed)
