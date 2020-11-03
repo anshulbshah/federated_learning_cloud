@@ -13,6 +13,17 @@ import dataset
 import wandb
 import matplotlib.pyplot as plt
 
+def set_random_seeds(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+    np.random.seed(seed)  # Numpy module.
+    random.seed(seed)  # Python random module.
+    torch.manual_seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
+
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
@@ -272,7 +283,7 @@ def main():
         wandb.config.update(args)
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
-    torch.manual_seed(args.seed)
+    set_random_seeds(args.seed)
     device = torch.device("cuda" if use_cuda else "cpu")
     kwargs = {'num_workers': 0, 'pin_memory': True} if use_cuda else {}
 
