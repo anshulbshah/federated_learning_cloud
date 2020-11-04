@@ -13,6 +13,7 @@ import dataset
 import wandb
 import matplotlib.pyplot as plt
 import random
+import os
 
 def set_random_seeds(seed):
     torch.manual_seed(seed)
@@ -247,17 +248,17 @@ def plot_data(data_dict):
 
 def main():
     # Training settings
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+    parser = argparse.ArgumentParser(description='Reducing Communication Rounds in Federated Learning')
     parser.add_argument('--batch-size', type=int, default=32, metavar='N',
-                        help='input batch size for training (default: 64)')
+                        help='input batch size for training (default: 32)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--max_iterations', type=int, default=20, metavar='N',
-                        help='number of iterations for global training')
+                        help='number of iterations for global training (default:20)')
     parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                         help='learning rate (default: 0.01)')
     parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
-                        help='SGD momentum (default: 0.5)')
+                        help='SGD momentum (default: 0.9)')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -274,13 +275,20 @@ def main():
                         help='Starting threshold for Check relevance function')
     parser.add_argument('--use_wandb', action='store_true', default=False,
                         help='Use wandb for logging')
+    parser.add_argument('--anonymous_mode', action='store_true', default=False,
+                        help='Use anonymous mode for visualizing results')
+
     args = parser.parse_args()
 
     #We use wandb for code logging. First run would require you to set it up on wandb.ai. 
     #To use wandb, set the flab --use_wandb. If not, matlplotlib plots are stored 
 
     if args.use_wandb:
-        wandb.init(project="cloud-federated",entity="cloud")
+        if args.anonymous_mode:
+            wandb.init(project="demo",anonymous="allow")
+        else:
+            wandb.init(project="cloud-federated",entity="cloud")
+            
         wandb.config.update(args)
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -344,6 +352,8 @@ def main():
         if last_update == None:
             print('exiting!')
             break
+        if (args.save_model):
+            torch.save(model.state_dict(),"model_"+ str(it) +".pt")
 
     all_stats = {
         'communication_rounds':communication_rounds,
@@ -353,9 +363,10 @@ def main():
         'threshold':thresholds,
         #'heatmap':np.stack(all_relevances,1).astype(np.float)
     }
-    plot_data(all_stats)
-    if (args.save_model):
-        torch.save(model.state_dict(),"mnist_cnn.pt")
+    with open('all_stats.pkl','wb') as f:
+        pickle.dump(all_stats,f)
+    #plot_data(all_stats)
+
 
 
 if __name__ == '__main__':
