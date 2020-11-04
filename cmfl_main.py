@@ -286,7 +286,7 @@ def main():
     if args.use_wandb:
         if args.anonymous_mode:
             wandb.login()
-            wandb.init(project="demo-cloud",anonymous="allow")
+            wandb.init(project="cloud-federated",anonymous="must")
         else:
             wandb.init(project="cloud-federated",entity="cloud")
             
@@ -329,6 +329,7 @@ def main():
     test_accuracies = []
     thresholds =[]
     average_signs =[]
+    when_above_60 = -1
     for it in tqdm(range(1, args.max_iterations)):
         c_round,last_update,avg_sign,thresh,rel_it = global_train(args, model, device, train_loaders, it,last_update)
         communication_rounds.append(c_round)
@@ -355,6 +356,8 @@ def main():
             break
         if (args.save_model):
             torch.save(model.state_dict(),"model_"+ str(it) +".pt")
+        if when_above_60 == -1 and test_acc > 60:
+            when_above_60 = sum(communication_rounds)
 
     all_stats = {
         'communication_rounds':communication_rounds,
@@ -364,6 +367,7 @@ def main():
         'threshold':thresholds,
         #'heatmap':np.stack(all_relevances,1).astype(np.float)
     }
+    print('Training done, the model reached above 60 percent accuracy after {} communication rounds'.format(when_above_60))
     with open('all_stats.pkl','wb') as f:
         pickle.dump(all_stats,f)
     #plot_data(all_stats)
