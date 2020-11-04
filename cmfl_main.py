@@ -14,7 +14,7 @@ import wandb
 import matplotlib.pyplot as plt
 import random
 import os
-wandb.init()
+
 def set_random_seeds(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -177,7 +177,7 @@ def global_train(args, model, device, train_loaders, it, last_update):
 
     if len(list(effective_update.keys())) == 0:
         print('No relevant model found!')
-        return 0,None,threshold,relevances
+        return 0,None,np.mean(np.asarray(average_signs)),threshold,relevances
     else:
         apply_update(model,effective_update)    
     return c_rounds,effective_update, np.mean(np.asarray(average_signs)),threshold, relevances
@@ -284,12 +284,12 @@ def main():
     #To use wandb, set the flab --use_wandb. If not, matlplotlib plots are stored 
 
     if args.use_wandb:
-        # if args.anonymous_mode:
-        #     wandb.login()
-        #     wandb.init(project="cloud-federated",anonymous="must")
-        # else:
-        #     wandb.init(project="cloud-federated",entity="cloud")
-        wandb.init(project="cloud",anonymous="must")
+        if args.anonymous_mode:
+            wandb.login()
+            wandb.init(project="cloud-federated",anonymous="must")
+        else:
+            wandb.init(project="cloud-federated",entity="cloud")
+            
         wandb.config.update(args)
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
