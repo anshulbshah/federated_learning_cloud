@@ -14,7 +14,7 @@ import wandb
 import matplotlib.pyplot as plt
 import random
 import os
-
+wandb.init()
 def set_random_seeds(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -284,12 +284,12 @@ def main():
     #To use wandb, set the flab --use_wandb. If not, matlplotlib plots are stored 
 
     if args.use_wandb:
-        if args.anonymous_mode:
-            wandb.login()
-            wandb.init(project="cloud-federated",anonymous="must")
-        else:
-            wandb.init(project="cloud-federated",entity="cloud")
-            
+        # if args.anonymous_mode:
+        #     wandb.login()
+        #     wandb.init(project="cloud-federated",anonymous="must")
+        # else:
+        #     wandb.init(project="cloud-federated",entity="cloud")
+        wandb.init(project="cloud",anonymous="must")
         wandb.config.update(args)
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -370,7 +370,7 @@ def main():
     print('Training done, the model reached above 60 percent accuracy after {} communication rounds'.format(when_above_60))
     with open('all_stats.pkl','wb') as f:
         pickle.dump(all_stats,f)
-    #plot_data(all_stats)
+    plot_data(all_stats)
 
 
 
