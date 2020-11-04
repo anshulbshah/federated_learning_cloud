@@ -285,7 +285,8 @@ def main():
 
     if args.use_wandb:
         if args.anonymous_mode:
-            wandb.init(project="demo",anonymous="allow")
+            wandb.login()
+            wandb.init(project="demo-cloud",anonymous="allow")
         else:
             wandb.init(project="cloud-federated",entity="cloud")
             
