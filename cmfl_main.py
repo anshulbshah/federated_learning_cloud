@@ -374,7 +374,7 @@ def main():
         #'heatmap':np.stack(all_relevances,1).astype(np.float)
     }
     print('Training done, the model reached above 60 percent accuracy after {} communication rounds'.format(when_above_60))
-    with open('generated_data/thresh'+str(args.start_threshold)+'/' + 'all_stats'+str(args.start_threshold) +'.pkl','wb') as f:
+    with open('generated_data/thresh'+str(args.start_threshold)+'/' + 'all_stats.pkl','wb') as f:
         pickle.dump(all_stats,f)
     plot_data(all_stats,'generated_data/thresh'+str(args.start_threshold)+'/')
 
