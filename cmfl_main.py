@@ -207,7 +207,7 @@ def test(args, model, device, test_loader):
         100. * correct / len(test_loader.dataset)))
     return test_loss, 100. * correct / len(test_loader.dataset)
 
-def plot_data(data_dict):
+def plot_data(data_dict,save_location):
     num_its_log = len(data_dict['communication_rounds'])
     cum_comm_rounds = np.cumsum(data_dict['communication_rounds'])
     plt.figure('1')
@@ -215,35 +215,35 @@ def plot_data(data_dict):
     plt.title('Cumulative Communication Rounds')
     plt.xlabel('Iterations')
     plt.ylabel('Cumulative Communication Rounds')
-    plt.savefig('cumulative_comm_rounds.png')
+    plt.savefig(save_location+'cumulative_comm_rounds.png')
 
     plt.figure('2')
     plt.plot(cum_comm_rounds,data_dict['test_loss'])
-    plt.title('Test loss vs Cum communication rounds')
+    plt.title('Test loss vs Cumulative communication rounds')
     plt.xlabel('Iterations')
     plt.ylabel('Test Loss')
-    plt.savefig('test_loss.png')
+    plt.savefig(save_location+'test_loss.png')
 
     plt.figure('3')
     plt.plot(cum_comm_rounds,data_dict['test_acc'])
     plt.title('Test Acc vs Cum communication rounds')
     plt.xlabel('Iterations')
     plt.ylabel('Test Acc')
-    plt.savefig('test_acc.png')
+    plt.savefig(save_location+'test_acc.png')
 
     plt.figure('4')
     plt.plot(range(num_its_log),data_dict['avg_sign'])
     plt.title('Average sign over iterations')
     plt.xlabel('Iterations')
     plt.ylabel('Average Sign')
-    plt.savefig('avg_sign.png')
+    plt.savefig(save_location+'avg_sign.png')
 
     plt.figure('5')
     plt.plot(range(num_its_log),data_dict['threshold'])
     plt.title('Threshold vs iterations')
     plt.xlabel('Iterations')
     plt.ylabel('Threshold')
-    plt.savefig('threshold.png')
+    plt.savefig(save_location+'threshold.png')
 
 
 def main():
@@ -322,6 +322,12 @@ def main():
 
     model = Net().to(device)
 
+
+    if not os.path.exists('generated_data'):
+        os.mkdir('generated_data')
+    if not os.path.exists('generated_data/thresh'+str(args.start_threshold)):
+        os.mkdir('generated_data/thresh'+str(args.start_threshold))
+
     communication_rounds = []
     last_update = None # Last update is initialized to None --> implies that for the first run, all updates are relevant
     all_relevances = [] 
@@ -368,9 +374,9 @@ def main():
         #'heatmap':np.stack(all_relevances,1).astype(np.float)
     }
     print('Training done, the model reached above 60 percent accuracy after {} communication rounds'.format(when_above_60))
-    with open('all_stats.pkl','wb') as f:
+    with open('generated_data/thresh'+str(args.start_threshold)+'/' + 'all_stats'+str(args.start_threshold) +'.pkl','wb') as f:
         pickle.dump(all_stats,f)
-    plot_data(all_stats)
+    plot_data(all_stats,'generated_data/thresh'+str(args.start_threshold)+'/')
 
 
 

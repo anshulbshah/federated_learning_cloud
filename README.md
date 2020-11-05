@@ -16,13 +16,18 @@ One of the main challenges in Federated Learning is communications as often the 
 - You can create a virtualenvironment from scratch by running the following commands:
 	+ `virtualenv -p python3 venv`
 	+ `source venv/bin/activate`
-	+ `pip install torch torchvision tqdm matplotlib tqdm`
+	+ `pip install torch torchvision tqdm matplotlib wandb`
 
 ### Reproducing results:
-- The main code is cmfl_main.py. It supports various commandline arguments. You can run `python cmfl_main.py --help` to get a description of the commands supported
-- We have already set the default parameters to accurately reproduce the result. To run the training  `python cmfl_main.py`
+- The main code is cmfl_main.py. It supports various commandline arguments. You can run `python3 cmfl_main.py --help` to get a description of the commands supported
+- To run with our hyperaprameters, execute the following code : `python3 cmfl_main.py --batch-size=64 --cli-ite-num=3 --lr=0.01 --start_threshold=0.6`
+- To run the baseline, execute the following code : `python3 cmfl_main.py --batch-size=64 --cli-ite-num=3 --lr=0.01 --start_threshold=0.0`
 - The GCP instance does not use a GPU and hence the training takes about 2.5 hours to complete
-- You can alternatively evaluate our models by runnnig
+- You can check the results from our saved data by running `jupyter-notebook visualize.ipynb --ip=0.0.0.0`
+	+ Open the URL http://34.67.126.107:8888?token=$TOKEN
+	+ Replace the variable $TOKEN by the token that you see on the terminal
+	+ Run the cells to visualize the results
+- If you wish to visualize the results without running the training code, we have stored the saved statistics in the folder `saved_data/` and you can visualize these by running `jupyter-notebook visualize_saved.ipynb --ip=0.0.0.0` and following the steps given above
 
 
 ### Acknowledgements
