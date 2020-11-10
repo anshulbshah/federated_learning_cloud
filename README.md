@@ -36,6 +36,9 @@ One of the main challenges in Federated Learning is communications as often the 
 - There is an unofficial code for CMFL available online *HyperionZhou/CMFL* but we found that it did not correctly replicate the paper and had some big issues with its implementation. Hence, we implemented our current version from scratch 
 
 
+### Issues ?
+Contact us at {ashah95,pdhar1,aroy28}@jhu.edu
+
 
 
 
