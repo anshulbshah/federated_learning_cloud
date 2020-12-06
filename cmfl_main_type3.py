@@ -57,7 +57,7 @@ def draw_heatmap(inputdata):
     return fig
 
 
-def combine_updates(local_updates,relevances):
+def combine_updates(local_updates,relevances,topk):
     """
     This function computes the effective update for each parameter by
     going over each parameter and averaging the update from all client models.
@@ -66,7 +66,7 @@ def combine_updates(local_updates,relevances):
     where_relevant = np.where(relevances == 1)[0]
     num_relevant = where_relevant.shape[0]
     # use 10% of the total number of clients
-    topk = int(num_relevant * 0.0)
+    topk = int(num_relevant * topk)
 
     effective_gradients = {}
     for rel_ind in where_relevant:
@@ -185,13 +185,14 @@ def global_train(args, model, device, train_loaders, it, last_update, previous_r
     average_signs = []
     threshold = args.start_threshold/np.sqrt(it)
     print('Threshold : {}'.format(threshold))
+
     for ck in range(len(train_loaders)):
-        # if previous_relevances[ck]:
-        #     rel,loc_up,avg_sign = client_train(args,ck,model,last_update,train_loaders[ck],device,threshold)
-        # else:
-        #     loc_up = previous_local_updates[ck]
-        #     rel,avg_sign = check_relevance(loc_up,last_update,threshold)
-        rel,loc_up,avg_sign = client_train(args,ck,model,last_update,train_loaders[ck],device,threshold)
+        if previous_relevances[ck]:
+            rel,loc_up,avg_sign = client_train(args,ck,model,last_update,train_loaders[ck],device,threshold)
+        else:            
+            loc_up = previous_local_updates[ck]
+            rel,avg_sign = check_relevance(loc_up,last_update,threshold)
+        # rel,loc_up,avg_sign = client_train(args,ck,model,last_update,train_loaders[ck],device,threshold)
         local_updates.append(loc_up)
         relevances.append(rel)
         average_signs.append(avg_sign)
@@ -202,7 +203,7 @@ def global_train(args, model, device, train_loaders, it, last_update, previous_r
 
     c_rounds_cmfl = np.where(relevances == 1)[0].shape[0]
 
-    effective_update,relevances = combine_updates(local_updates,relevances)
+    effective_update,relevances = combine_updates(local_updates,relevances,args.topk)
 
     c_rounds = np.where(relevances == 1)[0].shape[0]
 
@@ -216,7 +217,7 @@ def global_train(args, model, device, train_loaders, it, last_update, previous_r
     else:
         apply_update(model,effective_update)    
     
-    return c_rounds,effective_update, np.mean(np.asarray(average_signs)),threshold, relevances, local_updates
+    return [c_rounds_cmfl,c_rounds],effective_update, np.mean(np.asarray(average_signs)),threshold, relevances, local_updates
 
 def test(args, model, device, test_loader):
     """
@@ -313,6 +314,10 @@ def main():
                         help='Use wandb for logging')
     parser.add_argument('--anonymous_mode', action='store_true', default=False,
                         help='Use anonymous mode for visualizing results')
+    parser.add_argument('--force_client_train', type=int, default=5,
+                        help='After these many epochs, clients are selectively trained')
+    parser.add_argument('--topk', type=float, default=0.1,
+                        help='topk')
 
     args = parser.parse_args()
 
@@ -376,8 +381,13 @@ def main():
     average_signs =[]
     when_above_60 = -1
     for it in tqdm(range(1, args.max_iterations)):
-        c_round,last_update,avg_sign,thresh,rel_it, prev_local_updates = global_train(args, model, device, train_loaders, it,last_update, previous_relevances,prev_local_updates)
-
+        (c_round_cmfl,c_round_after_sel),last_update,avg_sign,thresh,rel_it, prev_local_updates = global_train(args, model, device, train_loaders, it,last_update, previous_relevances,prev_local_updates)
+        if it>args.force_client_train:
+            previous_relevances = rel_it
+            print('Not training all! ')
+            c_round = c_round_after_sel
+        else:
+            c_round = c_round_cmfl + args.client_num
         communication_rounds.append(c_round)
         test_loss,test_acc = test(args, model, device, test_loader)
         test_losses.append(test_loss)
