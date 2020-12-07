@@ -88,16 +88,24 @@ def combine_updates(local_updates,relevances,topk):
             deviation = {}
             deviations_list = []
             for k in local_updates[rel_ind].keys():
+                # if 'fc2' in k:
                 deviation[k] = torch.sqrt((effective_gradients[k]  - local_updates[rel_ind][k])**2 / num_relevant)
                 deviations_list.append(deviation[k].mean())
+                # deviation[k] -> var size
 
             avg_of_deviations = sum(deviations_list)/len(deviations_list)
+            # dev list - size 8
             avg_dev_list.append(avg_of_deviations.item())
         else:
             # if not relevant, we dont care.
             avg_dev_list.append(9999)
     sorted_ind = np.argsort(avg_dev_list)[:topk]
+    # sorted_ind = np.argsort(avg_dev_list)[::-1][:topk]
+
+
     relevances[sorted_ind] = 0
+
+
     return effective_gradients, relevances  
 
 def apply_update(model,update):
