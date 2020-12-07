@@ -108,6 +108,7 @@ def combine_updates(local_updates,relevances,topk):
 
     return effective_gradients, relevances  
 
+
 def apply_update(model,update):
     """
     Applies the gradients to update the global model
