@@ -14,7 +14,7 @@ import wandb
 import matplotlib.pyplot as plt
 import random
 import os
-
+import seaborn as sns
 def set_random_seeds(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -54,6 +54,11 @@ def draw_heatmap(inputdata):
     cbar = ax.figure.colorbar(im, ax=ax,fraction=0.02, pad=0.04)
     ax.set_xticks(np.arange(inputdata.shape[1]))
     fig.tight_layout()
+    return fig
+
+def draw_heatmap_seaborn(inputdata):
+    fig, ax = plt.subplots(figsize=(15,15)) 
+    ax = sns.heatmap(inputdata, xticklabels=10, yticklabels=5,linewidth=0.1,ax=ax)
     return fig
 
 
@@ -202,6 +207,10 @@ def global_train(args, model, device, train_loaders, it, last_update, previous_r
             prev_last_update = prev_global_updates[ck]
             prev_local_model = prev_local_models[ck]
             rel,loc_up,avg_sign,local_model = client_train(args,ck,prev_local_model,prev_last_update,train_loaders[ck],device,threshold)
+            random_flip = random.uniform(0,1)
+            if random_flip > args.randomness:                
+                rel = not rel
+
             # local_models.append(local_model)
             
             # rel,avg_sign = check_relevance(loc_up,last_update,threshold)
@@ -235,7 +244,6 @@ def global_train(args, model, device, train_loaders, it, last_update, previous_r
 
     for ck in range(len(train_loaders)):
         if previous_relevances[ck]:
-            print('{} is flipped to True'.format(ck))
             prev_global_updates[ck] = effective_update
 
     return [c_rounds_cmfl,c_rounds],effective_update, np.mean(np.asarray(average_signs)),threshold, relevances, local_updates,prev_local_models,prev_global_updates
@@ -339,6 +347,8 @@ def main():
                         help='After these many epochs, clients are selectively trained')
     parser.add_argument('--topk', type=float, default=0.1,
                         help='topk')
+    parser.add_argument('--randomness', type=float, default=1.1,
+                        help='topk')
 
     args = parser.parse_args()
 
@@ -394,8 +404,8 @@ def main():
     last_update = None # Last update is initialized to None --> implies that for the first run, all updates are relevant
     previous_relevances = [True]*args.client_num # Last update is initialized to None --> implies that for the first run, all updates are relevant
     prev_local_updates = None # Last update is initialized to None --> implies that for the first run, all updates are relevant
-    prev_local_models = [None]*args.client_num
-    prev_global_updates = [None]*args.client_num
+    prev_local_models = [None]*args.client_num  
+    prev_global_updates = [None]*args.client_num 
     all_relevances = [] 
     test_losses = []
     test_accuracies = []
@@ -419,7 +429,8 @@ def main():
         average_signs.append(avg_sign)
         all_relevances.append(rel_it)
         if args.use_wandb:
-            heatmap = draw_heatmap(np.stack(all_relevances,1).astype(np.float))
+            heatmap = draw_heatmap_seaborn(np.stack(all_relevances,1).astype(np.float))
+            # heatmap = draw_heatmap(np.stack(all_relevances,1).astype(np.float))
             wand_dict = {
                 'Communication Rounds':sum(communication_rounds),
                 'Test loss': test_loss,
@@ -448,7 +459,10 @@ def main():
     print('Training done, the model reached above 60 percent accuracy after {} communication rounds'.format(when_above_60))
     with open('generated_data/thresh'+str(args.start_threshold)+'/' + 'all_stats.pkl','wb') as f:
         pickle.dump(all_stats,f)
+    
     plot_data(all_stats,'generated_data/thresh'+str(args.start_threshold)+'/')
+
+
 
 
 
