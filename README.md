@@ -10,7 +10,7 @@ One of the main challenges in Federated Learning is communications as often the 
 ### Reproducing Results:
 There are two ways to reproduce our results.
 
-1. Google Colab
+1. Google Colab (Preferred)
 2. Running on your system
 
 ### 1) Using Google Colab
