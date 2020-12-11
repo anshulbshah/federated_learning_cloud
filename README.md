@@ -15,9 +15,9 @@ There are two ways to reproduce our results.
 
 ### 1) Using Google Colab
 Run the cells on the following two python notebooks to reproduce the results. The notebooks display will display the number of communication rounds required to reach 60% at the end along with a plot for Test accuracy vs Cumulative communication rounds. Make sure to select GPU as hardware accelerator in Runtime --> Change Runtime type
-- CMFL++ --> https://colab.research.google.com/drive/18j-IIpIQK9ABOZUhKsZ7wu2zlSl7emcT?usp=sharing
-- CMFL   --> https://colab.research.google.com/drive/1jOMNRNESXrADbygqWvW518OJJMSCffZp?usp=sharing
-- Vanilla --> https://colab.research.google.com/drive/16g6o0Mh2J4ILu19oQQc-lB6dEK_XarMX?usp=sharing
+- CMFL++ --> https://colab.research.google.com/drive/18j-IIpIQK9ABOZUhKsZ7wu2zlSl7emcT?usp=sharing : 1374 Communication Rounds
+- CMFL   --> https://colab.research.google.com/drive/1jOMNRNESXrADbygqWvW518OJJMSCffZp?usp=sharing : 2082 Communication Rounds
+- Vanilla --> https://colab.research.google.com/drive/16g6o0Mh2J4ILu19oQQc-lB6dEK_XarMX?usp=sharing : 2600 Communication Rounds
 
 ### 2) Running on your system
 #### Files:
